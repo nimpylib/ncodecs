@@ -1,48 +1,56 @@
 ## JS backend: decode with TextDecoder, encode with TextEncoder
 ## (utf-8 only for encoding)
 
-import std/[tables, jsffi, strutils]
+import std/[tables, jsffi, strutils, unicode]
 import pkg/jscompat/utils/[catchJsErr, jstypedarraysOps,
                            jsencodings, jstypedarrays]
+import pkg/py_locale_utf8_encoding/[ascii_utils, encoding_norm]
 import ./common
 
 # NOTE: WHATWG's encoding list, which is also what JS's TextDecoder
-# supports, overlaps with but is not the same as Python's codecs list.
-const jsEncAliases = [
-  ("utf-8", "utf-8"), ("utf8", "utf-8"), ("u8", "utf-8"),
-  ("utf-16", "utf-16le"), ("utf16", "utf-16le"), ("utf-16le", "utf-16le"),
-  ("ascii", "ascii"), ("us-ascii", "ascii"),
-  ("latin-1", "iso-8859-1"), ("latin1", "iso-8859-1"),
-  ("l1", "iso-8859-1"), ("iso-8859-1", "iso-8859-1"),
-  ("iso8859-1", "iso-8859-1"), ("iso-8859-15", "iso-8859-15"),
-  ("cp1250", "windows-1250"), ("cp1251", "windows-1251"),
-  ("cp1252", "windows-1252"), ("cp1253", "windows-1253"),
-  ("cp1254", "windows-1254"), ("cp1255", "windows-1255"),
-  ("cp1256", "windows-1256"), ("cp1257", "windows-1257"),
-  ("cp1258", "windows-1258"),
-  ("windows-1250", "windows-1250"), ("windows-1251", "windows-1251"),
-  ("windows-1252", "windows-1252"), ("windows-1253", "windows-1253"),
-  ("windows-1254", "windows-1254"), ("windows-1255", "windows-1255"),
-  ("windows-1256", "windows-1256"), ("windows-1257", "windows-1257"),
-  ("windows-1258", "windows-1258"),
-  ("shift-jis", "shift_jis"), ("shiftjis", "shift_jis"),
-  ("sjis", "shift_jis"), ("shift_jis", "shift_jis"),
-  ("euc-jp", "euc-jp"), ("eucjp", "euc-jp"),
-  ("euc-kr", "euc-kr"), ("euckr", "euc-kr"),
-  ("koi8-r", "koi8-r"), ("koi8r", "koi8-r"), ("koi8-u", "koi8-u"),
-  ("gb2312", "gbk"), ("gbk", "gbk"), ("gb18030", "gb18030"),
-  ("big5", "big5"), ("big5hkscs", "big5-hkscs"), ("big5-hkscs", "big5-hkscs"),
-  ("mac-roman", "x-mac-roman"), ("macroman", "x-mac-roman"),
-  ("iso-2022-jp", "iso-2022-jp"), ("hz-gb-2312", "hz-gb-2312"),
-  ("utf-16be", "utf-16be"), ("utf-16-be", "utf-16be"),
-].toTable
+# supports, subset of Python's codecs list.
+var jsEncAliases = {
+  # we must contain normalized `JsKind` encoding name first.
+  # ---
+  "utf": "utf-8", "utf8": "utf-8", "cp65001": "utf-8",
+  # ascii is also set in below
+  "8859": "latin1", "latin": "latin1",  # latin1
+  "utf-16-le": "utf-16le",
+  "utf-16-be": "utf-16be",
 
-type Backend* = object
-  codec: string
-  errors: EncErrors
-  isUtf8: bool
-  dec: TextDecoder
-  enc: TextEncoder
+  # the following is normal alias
+  # ---
+  "u8": "utf-8",
+  "shiftjis": "shift_jis",
+  "eucjp": "euc-jp",
+  "euckr": "euc-kr",
+  "koi8r": "koi8-r",
+  "mac-roman": "x-mac-roman", "macroman": "x-mac-roman",
+  "iso2022jp": "iso-2022-jp",
+  "utf-16-be": "utf-16be",
+}.toTable
+
+for i in ascii_aliases:
+  jsEncAliases[i] = "ascii"
+  # we handles ascii specially,
+  #  unlike js TextDecoder which mixes ascii and latin1
+
+type
+  JsKind = enum
+    jkWhatwg   ## TextDecoder; encode only if utf-8
+    jkUtf8
+    jkAscii    ## native: WHATWG maps "ascii" to windows-1252
+    jkLatin1   ## native: WHATWG maps "iso-8859-1" to windows-1252
+    jkUtf16le  ## TextDecoder for decode, native encode
+    jkUtf16be
+  Backend* = object
+    codec: string
+    errors: EncErrors
+    kind: JsKind
+    dec: TextDecoder
+    enc: TextEncoder
+
+const NativeSingleByte = {jkAscii, jkLatin1}
 
 template jsTry(body; onFail: untyped) =
   var failed = false
@@ -53,30 +61,81 @@ template jsTry(body; onFail: untyped) =
   if failed: onFail
 
 proc normalizeJsEncoding(encoding: string): string =
-  result = encoding.replace('_', '-').toLowerAscii
+  result = Py_normalize_encoding jsLabel encoding
   jsEncAliases.withValue result, val:
-    result = val
+    result = val[]
+
+proc toKind(enc: string): JsKind =
+  case enc
+  of "utf-8": jkUtf8
+  of "ascii": jkAscii
+  of "latin1": jkLatin1
+  of "utf-16le": jkUtf16le
+  of "utf-16be": jkUtf16be
+  else: jkWhatwg
 
 proc jsBytesToString(b: TypedArray[uint8, auto]): string =
   for i in 0..<b.len:
     result.add b[i].char
 
+func maxCode(k: JsKind): int =
+  if k == jkAscii: 0x7F else: 0xFF
+
 proc openBackend*(encoding: string, errors: EncErrors): Backend =
   let enc = normalizeJsEncoding(encoding)
-  result = Backend(codec: encoding, errors: errors, isUtf8: enc == "utf-8")
-  jsTry:
-    result.dec = newTextDecoder(cstring enc,
-      TextDecoderOptions{fatal: errors == EncErrors.strict})
-  do: raise unknownEncoding(encoding)
+  result = Backend(codec: encoding, errors: errors, kind: toKind(enc))
+  if result.kind notin NativeSingleByte:
+    jsTry:
+      result.dec = newTextDecoder(cstring enc,
+        TextDecoderOptions{fatal: errors == EncErrors.strict})
+    do: raise unknownEncoding(encoding)
   result.enc = newTextEncoder()
 
+proc addUtf16(res: var string, u: int, bigEndian: bool) =
+  let (lo, hi) = (char(u and 0xFF), char(u shr 8))
+  if bigEndian: res.add hi; res.add lo
+  else: res.add lo; res.add hi
+
 proc encodeImpl*(b: Backend, s: string): string =
-  if not b.isUtf8:
+  case b.kind
+  of jkUtf8: jsBytesToString(b.enc.encode(cstring s))
+  of jkUtf16le, jkUtf16be:
+    let be = b.kind == jkUtf16be
+    for r in s.runes:
+      var c = r.int
+      if c > 0xFFFF:
+        c -= 0x10000
+        result.addUtf16(0xD800 or (c shr 10), be)
+        result.addUtf16(0xDC00 or (c and 0x3FF), be)
+      else: result.addUtf16(c, be)
+    result
+  of jkAscii, jkLatin1:
+    let hi = b.kind.maxCode
+    var pos = 0
+    for r in s.runes:
+      if r.int <= hi: result.add char(r.int)
+      else:
+        onBadInput b.errors:
+          raise encodeErrorAt(b.codec, s, pos,
+            "ordinal not in range(" & $(hi+1) & ")")
+        do: result.add EncodeReplacement
+      pos += r.size
+    result
+  of jkWhatwg:
     raise newException(ValueError,
       "encoding " & b.codec & " does not support encode on js backend")
-  jsBytesToString(b.enc.encode(cstring s))
 
 proc decodeImpl*(b: Backend, s: string): string =
+  if b.kind in NativeSingleByte:
+    let hi = b.kind.maxCode
+    for i, c in s:
+      if c.int <= hi: result.add Rune(c.int)
+      else:
+        onBadInput b.errors:
+          raise decodeErrorAt(b.codec, s, i, 1,
+            "ordinal not in range(" & $(hi+1) & ")")
+        do: result.add DecodeReplacement
+    return
   var res: cstring
   jsTry:
     res = b.dec.decode(toUint8Array(s))

@@ -25,5 +25,6 @@ template pylib(x, ver) =
 
 pylib "pyerrors", " ^= 0.1.0"
 pylib "jscompat", " ^= 0.1.9"
+pylib "py_locale_utf8_encoding", " ^= 0.1.0"
 
 

@@ -11,21 +11,10 @@
 
 import std/[unicode, strutils]
 import pkg/pyerrors/[lkuperr, unicode_err]
+import pkg/py_locale_utf8_encoding/encoding_norm
+import pkg/py_locale_utf8_encoding/internal/pycore_fileutils
+export EncErrors, toPyErrorHandler, encoding_norm
 export LookupError, unicode_err
-
-type EncErrors*{.pure.} = enum
-  strict  ## - raise a ValueError error (or a subclass)
-  ignore  ## - ignore the character and continue with the next
-  replace ##[  - replace with a suitable replacement character;
-             Python will use the official U+FFFD REPLACEMENT
-             CHARACTER for the builtin Unicode codecs on
-             decoding and "?" on encoding.]##
-  surrogateescape   ## - replace with private code points U+DCnn.
-  xmlcharrefreplace ## - Replace with the appropriate XML
-                      ##   character reference (only for encoding).
-  backslashreplace  ## - Replace with backslashed escape sequences.
-  namereplace       ## - Replace with \N{...} escape sequences
-                      ##   (only for encoding).
 
 const
   DefEncErrors* = EncErrors.strict
