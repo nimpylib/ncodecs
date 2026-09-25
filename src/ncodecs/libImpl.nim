@@ -2,6 +2,7 @@
 ##  not the same as Python's codecs
 
 import std/unicode
+from std/strutils import parseEnum
 import pkg/pyerrors/lkuperr
 export LookupError
 
@@ -25,12 +26,13 @@ type
   EncoderClose = proc () {.raises: [].}
   NCodecInfo* = object
     name*: string
-    errors*: string
+    errors*: EncErrors
     encode*, decode*: EncoderCvt
     close*: EncoderClose
 
 const
-  DefErrors* = "strict"
+  DefEncErrors* = EncErrors.strict
+  DefErrors* = $DefEncErrors
 
 when defined(js):
   import std/tables
@@ -78,7 +80,7 @@ when defined(js):
     for i in 0..<b.len:
       result.add b[i].char
 
-  func initNCodecInfo*(encoding: string, errors = DefErrors): NCodecInfo =
+  func initNCodecInfo*(encoding: string, errors = DefEncErrors): NCodecInfo =
     ## JS backend impl: decode with TextDecoder, encode with TextEncoder
     ## (utf-8 only for encoding)
     result.name = encoding
@@ -87,7 +89,7 @@ when defined(js):
     var decFailed = false
     let enc = normalizeJsEncoding(encoding)
     jsTryCatchE:
-      dec = newTextDecoder(cstring enc, TextDecoderOptions{fatal: errors == "strict"})
+      dec = newTextDecoder(cstring enc, TextDecoderOptions{fatal: errors == strict})
     do:
       decFailed = true
     if decFailed:
@@ -124,12 +126,12 @@ else:
 
   proc encodings_open(
       destEncoding = "UTF-8"; srcEncoding = "CP1252";
-      errors=DefErrors  # XXX: just ignored, not impl yet
+      errors=DefEncErrors  # XXX: just ignored, not impl yet
     ): EncodingConverter =
     encodings.open(destEncoding=destEncoding, srcEncoding=srcEncoding)
 
   const innerEnc = "UTF-8"
-  func initNCodecInfo*(encoding: string, errors = DefErrors): NCodecInfo =
+  func initNCodecInfo*(encoding: string, errors = DefEncErrors): NCodecInfo =
     result.name = encoding
     var iEncCvt, oEncCvt: EncodingConverter
     try:
@@ -154,3 +156,7 @@ else:
     result.close = proc() =
       oEncCvt.close()
       iEncCvt.close()
+func initNCodecInfo*(encoding: string, errors: string): NCodecInfo =
+  initNCodecInfo(encoding, parseEnum[EncErrors](errors))
+
+
