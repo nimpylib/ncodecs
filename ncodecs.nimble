@@ -6,7 +6,7 @@ description   = "like Lib/codecs of Python but only Nim side api"
 license       = "MIT"
 srcDir        = "src"
 installExt    = @["nim"]
-bin           = @["ncodecs"]
+namedBin      = {"ncodecs": "niconv"}.toTable
 binDir        = "bin"
 
 # Dependencies
@@ -23,6 +23,7 @@ template pylib(x, ver) =
   requires if pylibPre == "": x & ver
            else: pylibPre & x
 
+pylib "handy_sugars", " ^= 0.1.0"
 pylib "pyerrors", " ^= 0.1.0"
 pylib "jscompat", " ^= 0.1.9"
 pylib "py_locale_utf8_encoding", " ^= 0.1.0"

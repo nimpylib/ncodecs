@@ -8,6 +8,7 @@ export EncErrors, DefEncErrors, DefErrors, LookupError,
 
 when defined(js): import ./libImpl/backend_js
 else: import ./libImpl/backend_native
+export setDefaultEncoding
 
 {.pragma: PraEncoderCvt, raises: [ValueError, LookupError, OSError].}
 type
