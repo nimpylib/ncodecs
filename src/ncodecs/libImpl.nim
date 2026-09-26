@@ -1,7 +1,6 @@
 ## Nim's codecs.
 ##  not the same as Python's codecs
 
-import std/unicode
 from std/strutils import parseEnum
 import ./libImpl/common
 export EncErrors, DefEncErrors, DefErrors, LookupError,
@@ -12,8 +11,7 @@ else: import ./libImpl/backend_native
 
 {.pragma: PraEncoderCvt, raises: [ValueError, LookupError, OSError].}
 type
-  CvtRes = tuple[data: string, len: int]
-  EncoderCvt = proc (s: string): CvtRes {.PraEncoderCvt.}
+  EncoderCvt = proc (s: string): string {.PraEncoderCvt.}
   EncoderClose = proc () {.raises: [].}
   NCodecInfo* = object
     name*: string
@@ -21,10 +19,10 @@ type
     encode*, decode*: EncoderCvt
     close*: EncoderClose
 
-template cvt(b: Backend, impl: untyped, inLen: untyped): EncoderCvt =
+template cvt(b: Backend, impl: untyped): EncoderCvt =
   ## wraps a backend conversion as a closure; `inLen` is evaluated on `s`
-  proc (s {.inject.}: string): CvtRes {.PraEncoderCvt.} =
-    (impl(b, s), inLen)
+  proc (s {.inject.}: string): string {.PraEncoderCvt.} =
+    impl(b, s)
 
 func initNCodecInfo*(encoding: string, errors = DefEncErrors): NCodecInfo =
   var b: Backend
@@ -34,8 +32,8 @@ func initNCodecInfo*(encoding: string, errors = DefEncErrors): NCodecInfo =
   NCodecInfo(
     name: encoding,
     errors: errors,
-    encode: cvt(b, encodeImpl, s.runeLen),
-    decode: cvt(b, decodeImpl, s.len),
+    encode: cvt(b, encodeImpl),
+    decode: cvt(b, decodeImpl),
     close: proc () = closeImpl(b),
   )
 
