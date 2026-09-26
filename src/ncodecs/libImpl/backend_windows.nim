@@ -13,6 +13,17 @@ const
   ERROR_INVALID_FLAGS = 1004'i32
   ERROR_NO_UNICODE_TRANSLATION = 1113'i32
 
+var DefCP = CP_UTF8
+
+proc nameToCodePageNum(encoding: string): int32 =
+  let cp = cast[int32](nameToCodePage(encoding))
+  if cp < 0 or cp in UnsupportedCPs:
+    raise unknownEncoding(encoding)
+  return cp
+
+proc setDefaultEncoding*(encoding: string) =
+  DefCp = nameToCodePageNum encoding
+
 proc multiByteToWideChar(codePage: int32, dwFlags: int32,
     lpMultiByteStr: cstring, cbMultiByte: cint,
     lpWideCharStr: cstring, cchWideChar: cint): cint {.
@@ -80,21 +91,18 @@ proc fromWide(cp: int32, w: string, errors: EncErrors): WinRes =
   result.ok = usedDef == 0 or errors == EncErrors.replace
 
 proc openBackend*(encoding: string, errors: EncErrors): Backend =
-  let cp = cast[int32](nameToCodePage(encoding))
-  if cp < 0 or cp in UnsupportedCPs:
-    raise unknownEncoding(encoding)
-  Backend(codec: encoding, errors: errors, cp: cp)
+  Backend(codec: encoding, errors: errors, cp: nameToCodePageNum(encoding))
 
 proc decodeImpl*(b: Backend, s: string): string =
   let (ok, w) = toWide(b.cp, s, b.errors == EncErrors.strict)
   if not ok: raise invalidDataError(b.codec, decoding = true)
-  result = fromWide(CP_UTF8, w, EncErrors.replace).data
+  result = fromWide(DefCP, w, EncErrors.replace).data
   if b.errors == EncErrors.ignore:
     # Windows API cannot tell where the bad bytes are
     result = stripDecodeReplacement result
 
 proc encodeImpl*(b: Backend, s: string): string =
-  let (ok, w) = toWide(CP_UTF8, s, b.errors == EncErrors.strict)
+  let (ok, w) = toWide(DefCP, s, b.errors == EncErrors.strict)
   if not ok: raise invalidDataError(b.codec, decoding = false)
   if b.errors == EncErrors.replace or noDefaultCharCP(b.cp):
     return fromWide(b.cp, w, EncErrors.replace).data
@@ -106,7 +114,7 @@ proc encodeImpl*(b: Backend, s: string): string =
   var pos = 0
   for r in s.runes:
     let rs = $r
-    let (ok1, w1) = toWide(CP_UTF8, rs, false)
+    let (ok1, w1) = toWide(DefCP, rs, false)
     let (ok2, d) = if ok1: fromWide(b.cp, w1, EncErrors.strict)
                    else: (false, "")
     if ok2: result.add d

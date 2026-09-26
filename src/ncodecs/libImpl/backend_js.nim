@@ -7,6 +7,8 @@ import pkg/jscompat/utils/[catchJsErr, jstypedarraysOps,
 import pkg/py_locale_utf8_encoding/[ascii_utils, encoding_norm]
 import ./common
 
+proc setDefaultEncoding*(encoding: string) {.error: "not supported on js backend".}
+
 # NOTE: WHATWG's encoding list, which is also what JS's TextDecoder
 # supports, subset of Python's codecs list.
 var jsEncAliases = {

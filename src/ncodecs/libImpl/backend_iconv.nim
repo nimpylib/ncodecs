@@ -19,7 +19,12 @@ proc iconv(c: Iconv, inbuf: ptr cstring, inbytesLeft: ptr csize_t,
 const
   IconvErr = high(csize_t)
   InvalidCd = cast[Iconv](-1)
-  InnerEnc = "UTF-8"
+
+var
+  InnerEnc = cstring "UTF-8"
+
+proc setDefaultEncoding*(encoding: string) =
+  InnerEnc = cstring encoding
 
 type
   Backend* = object
