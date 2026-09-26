@@ -8,8 +8,7 @@ export EncErrors, DefEncErrors, DefErrors, LookupError,
   UnicodeError, UnicodeDecodeError, UnicodeEncodeError
 
 when defined(js): import ./libImpl/backend_js
-elif defined(windows): import ./libImpl/backend_windows
-else: import ./libImpl/backend_iconv
+else: import ./libImpl/backend_native
 
 {.pragma: PraEncoderCvt, raises: [ValueError, LookupError, OSError].}
 type
