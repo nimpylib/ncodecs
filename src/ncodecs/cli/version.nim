@@ -1,7 +1,7 @@
 
 import std/compilesettings
 import std/strutils
-import std/os
+import std/paths
 import std/strformat
 import ./utils
 
@@ -10,16 +10,22 @@ when defined(nimPreviewSlimSystem):
   import std/syncio
 
 proc getNimbleMeta: tuple[version, author: string]{.compileTime.} =
-  let proj = querySetting(projectFull)
-  let projName = querySetting(projectName)
-  let nimbleFile = proj.parentDir.parentDir / projName & ".nimble"
+  let
+    proj = Path querySetting(projectFull)
+    projName = Path querySetting(projectName)
+  let nimbleFile = $(proj.parentDir /../ projName).addFileExt"nimble"
+  proc lstripSp(s: string): string =
+    s.strip(trailing=false, chars={' '})
   template tryGetVal(key) =
     let k = astToStr(key)
     if line.startsWith k:
       var res = line[k.len..^1]
-      res = res.strip(chars={' ', '=', '"'})
-      result.key = res
-      continue
+      res = res.lstripSp
+      if res[0] == '=':
+        res = res[1..^1]
+        res = res.lstripSp
+        result.key = res[1..^2]
+        continue
 
   for line in nimbleFile.readFile.splitLines: # use this as this proc is static
     tryGetVal version
