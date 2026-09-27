@@ -5,7 +5,7 @@ import std/syncio as nio
 from std/terminal import isatty
 import pkg/handy_sugars/assumes
 import ./libImpl
-import ./cli/[version, utils, helps]
+import ./cli/[version, utils, helps, sugars]
 
 proc closeIfNotTty(f: nio.File) =
   if not f.isatty: f.close
@@ -41,7 +41,7 @@ proc main* =
   for (kind, k, v) in getopt(
     shortNoVal = {'?', 'h', 'c',    's',      'V',       'l'},
     longNoVal = @["help", "usage","slient", "version", "list"],
-  ):
+  ).tryReplLastArg(mode=LaxMode):
     case kind
     of cmdEnd: unreachable
     of cmdArgument: inputs.add open k
