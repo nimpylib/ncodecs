@@ -31,7 +31,7 @@ proc setDefaultEncoding*(encoding: string) =
   InnerEnc = encoding
 
 type
-  Backend* = object
+  Backend* = ref object
     codec: string
     errors: EncErrors
     decCd, encCd: Iconv

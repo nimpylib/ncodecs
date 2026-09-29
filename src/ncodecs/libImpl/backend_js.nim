@@ -45,7 +45,7 @@ type
     jkLatin1   ## native: WHATWG maps "iso-8859-1" to windows-1252
     jkUtf16le  ## TextDecoder for decode, native encode
     jkUtf16be
-  Backend* = object
+  Backend* = ref object
     codec: string
     errors: EncErrors
     kind: JsKind

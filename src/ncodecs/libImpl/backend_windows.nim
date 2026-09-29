@@ -37,7 +37,7 @@ proc getLastError(): int32 {.stdcall, importc: "GetLastError",
   dynlib: "kernel32".}
 
 type
-  Backend* = object
+  Backend* = ref object
     codec: string
     errors: EncErrors
     cp: int32

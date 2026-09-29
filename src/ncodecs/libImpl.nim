@@ -14,24 +14,26 @@ export encoding_norm
 
 {.pragma: PraEncoderCvt, raises: [ValueError, LookupError, OSError].}
 type
-  EncoderCvt = proc (s: string): string {.PraEncoderCvt.}
-  EncoderClose = proc () {.raises: [].}
   NCodecInfo* = object
-    name*: string
-    errors*: EncErrors
-    encode*, decode*: EncoderCvt
-    close: EncoderClose
+    b: Backend
+    name: string
+    errors: EncErrors
 
 proc close*(self: NCodecInfo) = discard ## no need to call this. \
   ## remaining just for compatitable.
 defdestroy NCodecInfo:
-  if self.close.isNil: return
-  self.close()
+  if self.b.isNil: return
+  self.b.closeImpl
 
-template cvt(b: Backend, impl: untyped): EncoderCvt =
-  ## wraps a backend conversion as a closure; `inLen` is evaluated on `s`
-  proc (s {.inject.}: string): string {.PraEncoderCvt.} =
-    impl(b, s)
+using
+  self: NCodecInfo
+  s: string
+proc encode*(self; s): string = self.b.encodeImpl s
+proc decode*(self; s): string = self.b.decodeImpl s
+# getters
+proc name*(self): string = self.name
+proc errors*(self): EncErrors = self.errors
+
 
 func initNCodecInfo*(encoding: string, errors = DefEncErrors): NCodecInfo =
   var b: Backend
@@ -39,11 +41,9 @@ func initNCodecInfo*(encoding: string, errors = DefEncErrors): NCodecInfo =
     checkErrors errors
     b = openBackend(encoding, errors)
   NCodecInfo(
+    b: b,
     name: encoding,
     errors: errors,
-    encode: cvt(b, encodeImpl),
-    decode: cvt(b, decodeImpl),
-    close: proc () = closeImpl(b),
   )
 
 func initNCodecInfo*(encoding: string, errors: string): NCodecInfo =
