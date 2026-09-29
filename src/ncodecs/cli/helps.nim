@@ -1,9 +1,7 @@
 
 import std/strformat
 import ./utils
-
-const
-  repoUrl{.strdefine.} = ""
+import ./repoInfo
 
 proc getFooter: string =
   if repoUrl.len > 0:

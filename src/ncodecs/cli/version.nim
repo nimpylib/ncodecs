@@ -4,6 +4,7 @@ import std/strutils
 import std/paths
 import std/strformat
 import ./utils
+import ./repoInfo
 
 when defined(nimPreviewSlimSystem):
   import std/assertions
@@ -39,12 +40,12 @@ const info = getNimbleMeta()
 proc getVersion*: string =
   let app = getAppName()
   const year = CompileDate.split('-', 1)[0]
-  const Inc = info.author
+  const Inc = getRepoOwner info.author
   fmt"""
 {app} {info.version}
 Copyright (C) {year} {Inc}.
 This is free software; see the source for copying conditions.  There is NO
 warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 Written by {info.author}.
-"""  
+"""
 
