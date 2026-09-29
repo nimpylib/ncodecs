@@ -21,10 +21,10 @@ const
   InvalidCd = cast[Iconv](-1)
 
 var
-  InnerEnc = cstring "UTF-8"
+  InnerEnc = "UTF-8"
 
 proc setDefaultEncoding*(encoding: string) =
-  InnerEnc = cstring encoding
+  InnerEnc = encoding
 
 type
   Backend* = object
@@ -102,8 +102,8 @@ proc convert(b: Backend, s: string, isDecode: bool): string =
 
 proc openBackend*(encoding: string, errors: EncErrors): Backend =
   result = Backend(codec: encoding, errors: errors,
-    decCd: iconvOpen(InnerEnc, cstring encoding),
-    encCd: iconvOpen(cstring encoding, InnerEnc))
+    decCd: iconvOpen(cstring InnerEnc, cstring encoding),
+    encCd: iconvOpen(cstring encoding, cstring InnerEnc))
   if result.decCd == InvalidCd or result.encCd == InvalidCd:
     for cd in [result.decCd, result.encCd]:
       if cd != InvalidCd: iconvClose cd
