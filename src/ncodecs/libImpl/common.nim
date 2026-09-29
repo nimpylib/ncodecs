@@ -31,7 +31,8 @@ proc checkErrors*(errors: EncErrors) =
 proc unknownEncoding*(encoding: string): ref LookupError =
   newException(LookupError, "unknown encoding: " & encoding)
 
-proc encodeErrorAt*(codec, s: string, pos: int,
+using s: openArray[char]
+proc encodeErrorAt*(codec: string, s; pos: int,
     reason = "character maps to <undefined>"): ref UnicodeEncodeError =
   ## `pos` is a byte offset of UTF-8 `s`; reported position is in runes.
   let runePos = s.toOpenArray(0, pos-1).runeLen  # 0..-1 is empty
@@ -43,7 +44,7 @@ proc encodeErrorAt*(codec, s: string, pos: int,
     "'" & codec & "' codec can't encode character " & ch &
     "in position " & $runePos & ": " & reason)
 
-proc decodeErrorAt*(codec, s: string, pos, badLen: int,
+proc decodeErrorAt*(codec: string, s; pos, badLen: int,
     reason = "invalid start byte"): ref UnicodeDecodeError =
   newUnicodeDecodeError(codec, s[pos], pos, pos + max(1, badLen), reason)
 
@@ -69,5 +70,10 @@ proc stripDecodeReplacement*(s: string): string =
   ## NOTE: also removes U+FFFD that genuinely exist in input.
   s.replace(DecodeReplacement, "")
 
+template ptrAt*(s: cstring, i: int): cstring =
+  cast[cstring](cast[int](s) + i)
 template ptrAt*(s: string, i: int): cstring =
-  cast[cstring](cast[int](cstring(s)) + i)
+  ptrAt(cstring(s), i)
+template ptrAt*(s: openArray[char], i: int): cstring =
+  cast[cstring](addr s[i])
+

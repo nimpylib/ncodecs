@@ -27,7 +27,9 @@ defdestroy NCodecInfo:
 
 using
   self: NCodecInfo
-  s: string
+  s: openArray[char]|string
+# `|string` as we want to support types convertible to string
+#   like PyStr
 proc encode*(self; s): string = self.b.encodeImpl s
 proc decode*(self; s): string = self.b.decodeImpl s
 # getters

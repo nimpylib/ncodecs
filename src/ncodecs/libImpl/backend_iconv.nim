@@ -76,18 +76,19 @@ proc add(o: var OutBuf, s: string) =
   copyMem(addr o.data[o.pos], cstring(s), s.len)
   o.pos += s.len
 
-proc convert(b: Backend, s: string, isDecode: bool): string =
+using s: openArray[char]
+proc convert(b: Backend, s; isDecode: bool, L = s.len): string =
   let cd = if isDecode: b.decCd else: b.encCd
   discard iconv(cd, nil, nil, nil, nil)  # reset shift state
-  var o = OutBuf(data: newString(s.len + Slack))
+  var o = OutBuf(data: newString(L + Slack))
   var pos = 0
-  while pos < s.len:
-    let (n, e) = feed(cd, o, s.ptrAt(pos), s.len - pos)
+  while pos < L:
+    let (n, e) = feed(cd, o, s.ptrAt(pos), L - pos)
     pos += n
     if e == 0: break
     let truncated = e == EINVAL  # incomplete sequence at end
     let badLen =
-      if truncated: s.len - pos
+      if truncated: L - pos
       elif isDecode: 1
       else: max(1, s.runeLenAt(pos))
     onBadInput b.errors:
@@ -117,8 +118,8 @@ proc openBackend*(encoding: string, errors: EncErrors): Backend =
       if cd != InvalidCd: iconvClose cd
     raise unknownEncoding(encoding)
 
-proc encodeImpl*(b: Backend, s: string): string = b.convert(s, isDecode = false)
-proc decodeImpl*(b: Backend, s: string): string = b.convert(s, isDecode = true)
+proc encodeImpl*(b: Backend, s): string = b.convert(s, isDecode = false)
+proc decodeImpl*(b: Backend, s): string = b.convert(s, isDecode = true)
 
 proc closeImpl*(b: Backend) =
   iconvClose b.encCd

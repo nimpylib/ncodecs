@@ -93,7 +93,8 @@ proc addUtf16(res: var string, u: int, bigEndian: bool) =
   if bigEndian: res.add hi; res.add lo
   else: res.add lo; res.add hi
 
-proc encodeImpl*(b: Backend, s: string): string =
+using s: openArray[char]
+proc encodeImpl*(b: Backend, s): string =
   case b.kind
   of jkUtf8:
     let pos = validateUtf8 s
@@ -125,7 +126,7 @@ proc encodeImpl*(b: Backend, s: string): string =
     raise newException(ValueError,
       "encoding " & b.codec & " does not support encode on js backend")
 
-proc decodeImpl*(b: Backend, s: string): string =
+proc decodeImpl*(b: Backend, s): string =
   if b.kind in NativeSingleByte:
     let hi = b.kind.maxCode
     for i, c in s:

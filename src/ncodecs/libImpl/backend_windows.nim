@@ -25,7 +25,7 @@ proc setDefaultEncoding*(encoding: string) =
   DefCP = nameToCodePageNum encoding
 
 proc multiByteToWideChar(codePage: int32, dwFlags: int32,
-    lpMultiByteStr: cstring, cbMultiByte: cint,
+    lpMultiByteStr: cstring|(ptr char), cbMultiByte: cint,
     lpWideCharStr: WideCString, cchWideChar: cint): cint {.
   stdcall, importc: "MultiByteToWideChar", dynlib: "kernel32".}
 proc wideCharToMultiByte(codePage: int32, dwFlags: int32,
@@ -65,22 +65,23 @@ template twoPass(DstT: typedesc, call: untyped, alloc: untyped) =
     dst = alloc
     if call == 0: raiseOSError(osLastError())
 
-proc toWide(cp: int32, s: string, strict: bool, w: var Wide): bool =
+using s: openArray[char]
+proc toWide(cp: int32, s; strict: bool, w: var Wide): bool =
   ## returns false on invalid input when `strict`
   if s.len == 0: return true
   if cp == CP_UTF16LE:
     w = newWideCString(s.len div 2)
-    if w.len > 0: copyMem(addr w.data[0], cstring(s), w.len * 2)
+    if w.len > 0: copyMem(addr w.data[0], addr s[0], w.len * 2)
     return true
   var flags = if strict: MB_ERR_INVALID_CHARS else: 0'i32
-  let probe = multiByteToWideChar(cp, flags, cstring s, cint s.len, nil, 0)
+  let probe = multiByteToWideChar(cp, flags, addr s[0], cint s.len, nil, 0)
   if probe == 0:
     case getLastError()
     of ERROR_NO_UNICODE_TRANSLATION: return false
     of ERROR_INVALID_FLAGS: flags = 0  # some code pages reject the flag
     else: raiseOSError(osLastError())
   twoPass WideCString,
-      multiByteToWideChar(cp, flags, cstring s, cint s.len, dst, n):
+      multiByteToWideChar(cp, flags, addr s[0], cint s.len, dst, n):
     w = newWideCString(n)
     w
   true
@@ -108,7 +109,7 @@ proc fromWide(cp: int32, w: Wide, errors: EncErrors, res: var string): bool =
 proc openBackend*(encoding: string, errors: EncErrors): Backend =
   Backend(codec: encoding, errors: errors, cp: nameToCodePageNum(encoding))
 
-proc decodeImpl*(b: Backend, s: string): string =
+proc decodeImpl*(b: Backend, s): string =
   var w: Wide
   if not toWide(b.cp, s, b.errors == EncErrors.strict, w):
     raise invalidDataError(b.codec, decoding = true)
@@ -117,7 +118,7 @@ proc decodeImpl*(b: Backend, s: string): string =
     # Windows API cannot tell where the bad bytes are
     result = stripDecodeReplacement result
 
-proc encodeImpl*(b: Backend, s: string): string =
+proc encodeImpl*(b: Backend, s): string =
   var w: Wide
   if not toWide(DefCP, s, b.errors == EncErrors.strict, w):
     raise invalidDataError(b.codec, decoding = false)
