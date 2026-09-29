@@ -39,7 +39,7 @@ proc main* =
     from_code, to_code = "utf-8"
   for (kind, k, v) in getopt(
     shortNoVal = {'?', 'h', 'c',    's',      'V',       'l'},
-    longNoVal = @["help", "usage","slient", "version", "list"],
+    longNoVal = @["help", "usage","silent", "version", "list"],
   ).tryReplLastArg(mode=LaxMode):
     case kind
     of cmdEnd: unreachable
@@ -49,12 +49,14 @@ proc main* =
       of "help", "?", "h": exitWith getHelp()
       of "usage": exitWith getUsage()
       of "c": errors = ignore
-      of "s": discard #TODO:warn
+      of "s", "silent": discard # `man iconv 1`: This option is ignored.
       of "o", "output": output = open(v, fmWrite)
       of "f", "from-code": from_code = v
       of "t", "to-code": to_code = v
       #of "l", "list": TODO
       of "V", "version": exitWith getVersion()
+      of "": # `-`
+        inputs.add nio.stdin
       else: badOption k
   if inputs.len == 0:
     inputs.add nio.stdin
