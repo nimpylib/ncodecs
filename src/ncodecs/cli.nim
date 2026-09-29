@@ -20,7 +20,6 @@ proc main*(from_code, to_code: string, errors = DefEncErrors;
       let s = input.readLine
       output.writeLine enc.encode(s)
     input.closeIfNotTty
-  enc.close()
 
 proc exitWith(msg: string) {.noReturn.} =
   nio.stdout.write msg

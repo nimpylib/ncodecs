@@ -2,6 +2,7 @@
 ##  not the same as Python's codecs
 
 from std/strutils import parseEnum
+import pkg/nimpatch/destroyPatch
 import ./libImpl/common
 export EncErrors, DefEncErrors, DefErrors, LookupError,
   UnicodeError, UnicodeDecodeError, UnicodeEncodeError
@@ -9,6 +10,7 @@ export EncErrors, DefEncErrors, DefErrors, LookupError,
 when defined(js): import ./libImpl/backend_js
 else: import ./libImpl/backend_native
 export setDefaultEncoding
+export encoding_norm
 
 {.pragma: PraEncoderCvt, raises: [ValueError, LookupError, OSError].}
 type
@@ -18,7 +20,13 @@ type
     name*: string
     errors*: EncErrors
     encode*, decode*: EncoderCvt
-    close*: EncoderClose
+    close: EncoderClose
+
+proc close*(self: NCodecInfo) = discard ## no need to call this. \
+  ## remaining just for compatitable.
+defdestroy NCodecInfo:
+  if self.close.isNil: return
+  self.close()
 
 template cvt(b: Backend, impl: untyped): EncoderCvt =
   ## wraps a backend conversion as a closure; `inLen` is evaluated on `s`
