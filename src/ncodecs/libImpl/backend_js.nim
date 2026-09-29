@@ -3,7 +3,7 @@
 
 import std/[tables, jsffi, strutils, unicode]
 import pkg/jscompat/utils/[catchJsErr, jstypedarraysOps,
-                           jsencodings, jstypedarrays]
+                           jsencodings]
 import pkg/py_locale_utf8_encoding/[ascii_utils, encoding_norm]
 import ./common
 
@@ -50,7 +50,7 @@ type
     errors: EncErrors
     kind: JsKind
     dec: TextDecoder
-    enc: TextEncoder
+# NOTE: Js's TextEncoder only support utf-8. So it's no need to use it.
 
 const NativeSingleByte = {jkAscii, jkLatin1}
 
@@ -76,10 +76,6 @@ proc toKind(enc: string): JsKind =
   of "utf-16be": jkUtf16be
   else: jkWhatwg
 
-proc jsBytesToString(b: TypedArray[uint8, auto]): string =
-  for i in 0..<b.len:
-    result.add b[i].char
-
 func maxCode(k: JsKind): int =
   if k == jkAscii: 0x7F else: 0xFF
 
@@ -91,7 +87,6 @@ proc openBackend*(encoding: string, errors: EncErrors): Backend =
       result.dec = newTextDecoder(cstring enc,
         TextDecoderOptions{fatal: errors == EncErrors.strict})
     do: raise unknownEncoding(encoding)
-  result.enc = newTextEncoder()
 
 proc addUtf16(res: var string, u: int, bigEndian: bool) =
   let (lo, hi) = (char(u and 0xFF), char(u shr 8))
@@ -100,7 +95,13 @@ proc addUtf16(res: var string, u: int, bigEndian: bool) =
 
 proc encodeImpl*(b: Backend, s: string): string =
   case b.kind
-  of jkUtf8: jsBytesToString(b.enc.encode(cstring s))
+  of jkUtf8:
+    let pos = validateUtf8 s
+    if pos < 0:
+      result = newString(s.len)
+      for i, c in s: result[i] = c
+      return
+    raise encodeErrorAt(b.codec, s, pos, "invalid utf8 byte")
   of jkUtf16le, jkUtf16be:
     let be = b.kind == jkUtf16be
     for r in s.runes:
@@ -110,19 +111,16 @@ proc encodeImpl*(b: Backend, s: string): string =
         result.addUtf16(0xD800 or (c shr 10), be)
         result.addUtf16(0xDC00 or (c and 0x3FF), be)
       else: result.addUtf16(c, be)
-    result
   of jkAscii, jkLatin1:
     let hi = b.kind.maxCode
     var pos = 0
     for r in s.runes:
-      if r.int <= hi: result.add char(r.int)
+      if r.int <= hi: result.add cast[char](r)
       else:
         onBadInput b.errors:
           raise encodeErrorAt(b.codec, s, pos,
             "ordinal not in range(" & $(hi+1) & ")")
         do: result.add EncodeReplacement
-      pos += r.size
-    result
   of jkWhatwg:
     raise newException(ValueError,
       "encoding " & b.codec & " does not support encode on js backend")
